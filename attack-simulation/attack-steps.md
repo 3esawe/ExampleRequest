@@ -8,6 +8,45 @@ Follow these steps to simulate a pwn request attack safely.
 2. Enable GitHub Actions in your repository
 3. Have a second GitHub account or ask a colleague to help
 
+## Workflow Management for Attack Demo
+
+Keep all three workflows, but you need to disable/rename some temporarily:
+
+### For the Attack Simulation:
+
+1. Keep vulnerable.yml ACTIVE - this is your target for the attack
+2. Temporarily disable secure.yml - rename it so it doesn't interfere:
+  bash
+   git mv .github/workflows/secure.yml .github/workflows/secure.yml.disabled
+   git commit -m "Temporarily disable secure workflow for demo"
+   git push
+   
+3. Keep detection.yml ACTIVE - it will show you the vulnerabilities
+
+### Why This Setup:
+
+• **vulnerable.yml** - Will execute the malicious code when you create the PR
+• **detection.yml** - Will scan and report that vulnerable.yml is vulnerable  
+• **secure.yml.disabled** - Won't run, so it won't interfere with the attack
+
+### After the Attack Demo:
+
+1. Replace vulnerable with secure:
+  bash
+   git rm .github/workflows/vulnerable.yml
+   git mv .github/workflows/secure.yml.disabled .github/workflows/secure.yml
+   git commit -m "Replace vulnerable workflow with secure version"
+   git push
+   
+
+2. Test that the attack no longer works by creating another malicious PR
+
+### Expected Behavior:
+
+• **First PR** (with vulnerable.yml active): Attack succeeds 🚨
+• **Second PR** (with secure.yml active): Attack fails ✅
+• **Detection workflow**: Always reports vulnerabilities when present
+
 ## Step 1: Setup Vulnerable Repository
 
 1. **Push the vulnerable workflow** to your main repository:
