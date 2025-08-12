@@ -1,0 +1,84 @@
+name: "✅ SECURE - PR Validation"
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+# ✅ SECURE: Explicitly restrict permissions
+permissions:
+  contents: read        # Only read repository content
+  pull-requests: write  # Only comment on PRs
+  # All other permissions: none (no write access)
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "✅ Checkout trusted base branch only"
+        uses: actions/checkout@v4
+        with:
+          # ✅ SECURE: Always checkout the base branch, never PR branch
+          ref: ${{ github.event.repository.default_branch }}
+          
+      - name: "✅ Download PR files safely"
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # ✅ Download specific files without executing them
+          mkdir -p pr-files
+          
+          # Get list of changed files
+          curl -H "Authorization: token $GITHUB_TOKEN" \
+               "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files" \
+               > pr-files/changed-files.json
+               
+          # Download package.json for validation (if changed)
+          if jq -r '.[].filename' pr-files/changed-files.json | grep -q "package.json"; then
+            curl -H "Authorization: token $GITHUB_TOKEN" \
+                 -H "Accept: application/vnd.github.raw" \
+                 "https://api.github.com/repos/${{ github.repository }}/contents/package.json?ref=${{ github.event.pull_request.head.sha }}" \
+                 > pr-files/package.json
+          fi
+          
+      - name: "✅ Validate package.json safely"
+        run: |
+          if [ -f "pr-files/package.json" ]; then
+            echo "Validating package.json from PR..."
+            
+            # Check for suspicious scripts
+            if grep -q "postinstall\|preinstall" pr-files/package.json; then
+              echo "❌ SECURITY: Suspicious install scripts detected!"
+              echo "::error::PR contains potentially malicious install scripts"
+              exit 1
+            fi
+            
+            # Validate JSON syntax
+            if ! jq empty pr-files/package.json; then
+              echo "❌ Invalid JSON in package.json"
+              exit 1
+            fi
+            
+            echo "✅ package.json validation passed"
+          fi
+          
+      - name: "✅ Static analysis only"
+        run: |
+          echo "Performing static analysis on PR files..."
+          echo "✅ This is safe because we're not executing untrusted code"
+          
+          # Example: Check for common security issues
+          if [ -f "pr-files/changed-files.json" ]; then
+            echo "Files changed in this PR:"
+            jq -r '.[].filename' pr-files/changed-files.json
+          fi
+          
+      - name: "✅ Comment on PR with results"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ **Security validation passed!** This PR has been safely analyzed without executing untrusted code.'
+            });

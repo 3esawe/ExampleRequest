@@ -1,0 +1,104 @@
+name: "🔍 Vulnerability Scanner"
+
+on:
+  push:
+    paths:
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  scan-workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: "Create vulnerability scanner"
+        run: |
+          cat > scan_workflows.py << 'EOF'
+          #!/usr/bin/env python3
+          import yaml
+          import glob
+          import re
+          import sys
+          
+          def scan_workflow(file_path):
+              vulnerabilities = []
+              
+              try:
+                  with open(file_path, 'r') as f:
+                      workflow = yaml.safe_load(f)
+              except Exception as e:
+                  return [f"ERROR: Cannot parse {file_path}: {e}"]
+              
+              workflow_str = str(workflow)
+              
+              # Check for dangerous triggers
+              dangerous_triggers = ['pull_request_target', 'issue_comment']
+              has_dangerous_trigger = any(trigger in workflow_str for trigger in dangerous_triggers)
+              
+              if has_dangerous_trigger:
+                  # Check for untrusted checkout
+                  untrusted_patterns = [
+                      'github.event.pull_request.head.sha',
+                      'github.event.pull_request.head.ref'
+                  ]
+                  
+                  has_untrusted_checkout = any(pattern in workflow_str for pattern in untrusted_patterns)
+                  
+                  if has_untrusted_checkout:
+                      vulnerabilities.append("🚨 CRITICAL: Untrusted code checkout with dangerous trigger")
+                  
+                  # Check for missing permissions
+                  if 'permissions' not in workflow:
+                      vulnerabilities.append("⚠️  HIGH: Missing permission restrictions")
+                  
+                  # Check for code execution
+                  execution_patterns = ['npm install', 'yarn install', 'bash', 'python', 'node']
+                  has_execution = any(pattern in workflow_str.lower() for pattern in execution_patterns)
+                  
+                  if has_execution and has_untrusted_checkout:
+                      vulnerabilities.append("🚨 CRITICAL: Code execution after untrusted checkout")
+              
+              return vulnerabilities
+          
+          def main():
+              print("🔍 Scanning GitHub Actions workflows for vulnerabilities...\n")
+              
+              total_vulns = 0
+              for workflow_file in glob.glob('.github/workflows/*.yml'):
+                  print(f"📄 Scanning: {workflow_file}")
+                  vulns = scan_workflow(workflow_file)
+                  
+                  if vulns:
+                      total_vulns += len(vulns)
+                      for vuln in vulns:
+                          print(f"   {vuln}")
+                  else:
+                      print("   ✅ No vulnerabilities detected")
+                  print()
+              
+              print(f"📊 Summary: {total_vulns} vulnerabilities found")
+              
+              if total_vulns > 0:
+                  print("\n🛡️  Recommendations:")
+                  print("   1. Use 'permissions:' to restrict token access")
+                  print("   2. Never checkout untrusted PR branches")
+                  print("   3. Use static analysis instead of code execution")
+                  print("   4. Consider separate workflows for different security contexts")
+                  return 1
+              
+              return 0
+          
+          if __name__ == "__main__":
+              sys.exit(main())
+          EOF
+          
+          chmod +x scan_workflows.py
+          
+      - name: "Run vulnerability scan"
+        run: python3 scan_workflows.py

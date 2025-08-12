@@ -1,0 +1,44 @@
+name: "🚨 VULNERABLE - PR Validation"
+
+# DANGEROUS: This workflow is intentionally vulnerable for demo purposes
+# DO NOT use this pattern in production!
+
+on:
+  pull_request_target:  # 🚨 Dangerous trigger with write permissions
+    types: [opened, synchronize]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    # 🚨 Missing permissions restriction - defaults to write-all
+    steps:
+      - name: "🚨 Checkout untrusted PR code"
+        uses: actions/checkout@v4
+        with:
+          # 🚨 CRITICAL VULNERABILITY: Checking out attacker's code
+          ref: ${{ github.event.pull_request.head.sha }}
+          
+      - name: "🚨 Install dependencies from untrusted package.json"
+        run: |
+          # 🚨 This will execute any malicious postinstall scripts
+          npm install
+          
+      - name: "🚨 Run tests from untrusted code"
+        run: |
+          # 🚨 This executes attacker's test scripts
+          npm test
+          
+      - name: "🚨 Execute custom script"
+        run: |
+          # 🚨 This runs any script the attacker provides
+          if [ -f "custom-check.sh" ]; then
+            chmod +x custom-check.sh
+            ./custom-check.sh
+          fi
+          
+      - name: "Show token permissions (for demo)"
+        run: |
+          echo "Current permissions with GITHUB_TOKEN:"
+          curl -H "Authorization: token $GITHUB_TOKEN" \
+               https://api.github.com/repos/${{ github.repository }} \
+               | jq '.permissions'
